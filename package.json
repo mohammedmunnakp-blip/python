@@ -1,1 +1,13 @@
-
+{
+  "name": "dev-quiz-tma",
+  "version": "1.0.0",
+  "description": "Educational Telegram Mini App",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "firebase-admin": "^12.0.0"
+  }
+}
