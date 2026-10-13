@@ -10,9 +10,11 @@ const db = admin.firestore();
 
 const app = express();
 app.use(express.json());
+
+// Serves the index.html from the "public" folder
 app.use(express.static(path.join(__dirname, 'public')));
 
-// REPLACE with your actual numeric Telegram User ID
+// Set your Admin Telegram ID here
 const ADMIN_TELEGRAM_IDS = [123456789]; 
 
 // Get random challenge
