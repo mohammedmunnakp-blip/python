@@ -1,1 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevQuiz Daily</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Adsgram SDK Script -->
+    <script src="https://sad.adsgram.ai/js/sad.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
 
+    <!-- Header -->
+    <header class="p-4 bg-slate-800 border-b border-slate-700 flex justify-between items-center">
+        <h1 class="font-bold text-lg text-emerald-400">⚡ DevQuiz Daily</h1>
+        <div id="streak-counter" class="text-sm bg-slate-700 px-3 py-1 rounded-full">🔥 Streak: 0</div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="flex-1 p-4 max-w-md mx-auto w-full flex flex-col justify-center">
+        
+        <!-- Language Selector Screen -->
+        <div id="language-selection" class="space-y-4">
+            <h2 class="text-xl font-semibold text-center mb-6">Choose Your Track Today</h2>
+            <button onclick="loadDailyChallenge('python')" class="w-full py-4 bg-blue-600 hover:bg-blue-500 rounded-xl font-bold text-lg transition shadow-lg">Python Challenge</button>
+            <button onclick="loadDailyChallenge('javascript')" class="w-full py-4 bg-amber-500 hover:bg-amber-400 rounded-xl font-bold text-lg text-slate-950 transition shadow-lg">JavaScript Challenge</button>
+            <div id="admin-btn-container" class="mt-8 hidden">
+                <button onclick="openAdminPanel()" class="w-full py-2 bg-purple-700 hover:bg-purple-600 rounded-lg text-sm font-semibold">Admin Panel</button>
+            </div>
+        </div>
+
+        <!-- Quiz Screen (Hidden by default) -->
+        <div id="quiz-screen" class="hidden space-y-4">
+            <div class="flex justify-between text-xs text-slate-400 uppercase tracking-wider">
+                <span id="quiz-lang">Python</span>
+                <span>Daily Challenge</span>
+            </div>
+            <div id="question-text" class="text-lg font-medium bg-slate-800 p-4 rounded-xl border border-slate-700 min-h-[100px] flex items-center">
+                Loading challenge...
+            </div>
+            <div id="options-container" class="space-y-2">
+                <!-- Dynamically injected options -->
+            </div>
+            <button id="hint-btn" onclick="watchAdForHint()" class="w-full py-2 bg-slate-800 border border-slate-600 hover:bg-slate-700 rounded-lg text-xs text-emerald-400 font-semibold">💡 Watch optional ad for a hint</button>
+        </div>
+
+        <!-- Result / Explanation Screen -->
+        <div id="result-screen" class="hidden space-y-4 text-center">
+            <div id="result-status" class="text-2xl font-bold"></div>
+            <p id="explanation-text" class="text-sm bg-slate-800 p-4 rounded-xl text-slate-300"></p>
+            <button onclick="resetToHome()" class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl font-bold">Back to Home</button>
+        </div>
+
+        <!-- Admin Panel Screen -->
+        <div id="admin-screen" class="hidden space-y-4">
+            <h2 class="text-lg font-bold text-purple-400">Add New Challenge</h2>
+            <input type="text" id="admin-q" placeholder="Question statement" class="w-full p-3 bg-slate-800 border border-slate-700 rounded-lg text-sm">
+            <select id="admin-lang" class="w-full p-3 bg-slate-800 border border-slate-700 rounded-lg text-sm">
+                <option value="python">Python</option>
+                <option value="javascript">JavaScript</option>
+            </select>
+            <input type="text" id="admin-opt0" placeholder="Option A" class="w-full p-3 bg-slate-800 border border-slate-700 rounded-lg text-sm">
+            <input type="text" id="admin-opt1" placeholder="Option B" class="w-full p-3 bg-slate-800 border border-slate-700 rounded-lg text-sm">
+            <input type="text" id="admin-opt2" placeholder="Option C" class="w-full p-3 bg-slate-800 border border-slate-700 rounded-lg text-sm">
+            <input type="number" id="admin-correct" placeholder="Correct Option Index (0, 1, or 2)" class="w-full p-3 bg-slate-800 border border-slate-700 rounded-lg text-sm">
+            <textarea id="admin-explanation" placeholder="Detailed explanation" class="w-full p-3 bg-slate-800 border border-slate-700 rounded-lg text-sm"></textarea>
+            <button onclick="submitNewQuestion()" class="w-full py-3 bg-purple-600 font-bold rounded-lg">Save Question</button>
+            <button onclick="resetToHome()" class="w-full py-2 bg-slate-700 rounded-lg text-xs">Close Admin</button>
+        </div>
+
+    </main>
+
+    <script>
+        // Telegram WebApp Initialization
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        const user = tg.initDataUnsafe?.user || { id: 123456, username: 'TestUser' };
+
+        // Adsgram Rewarded Controller Setup (Block ID from your Adsgram dashboard)
+        const adController = window.Adsgram ? window.Adsgram.init({ blockId: "YOUR_ADSGRAM_BLOCK_ID" }) : null;
+
+        let currentQuestionData = null;
+
+        async function loadDailyChallenge(lang) {
+            document.getElementById('language-selection').classList.add('hidden');
+            document.getElementById('quiz-screen').classList.remove('hidden');
+            document.getElementById('quiz-lang').innerText = lang.toUpperCase();
+
+            // Fetch question from your backend / Firebase REST API
+            try {
+                const res = await fetch(`/api/get-challenge?lang=${lang}`);
+                currentQuestionData = await res.json();
+                
+                document.getElementById('question-text').innerText = currentQuestionData.question;
+                const optContainer = document.getElementById('options-container');
+                optContainer.innerHTML = '';
+                
+                currentQuestionData.options.forEach((opt, index) => {
+                    optContainer.innerHTML += `<button onclick="verifyAnswer(${index})" class="w-full p-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-left text-sm transition">${opt}</button>`;
+                });
+            } catch (err) {
+                document.getElementById('question-text').innerText = "Failed to load today's challenge. Please try again later.";
+            }
+        }
+
+        async function watchAdForHint() {
+            if (adController) {
+                try {
+                    // Trigger rewarded ad safely (voluntary user action, avoiding Clause 11 violations)
+                    const result = await adController.show();
+                    if (result.done) {
+                        alert("Hint: " + currentQuestionData.explanation.substring(0, 50) + "...");
+                    }
+                } catch (e) {
+                    alert("Ad unavailable right now. You can still answer normally!");
+                }
+            } else {
+                alert("Ads are initializing...");
+            }
+        }
+
+        function verifyAnswer(selectedIndex) {
+            document.getElementById('quiz-screen').classList.add('hidden');
+            document.getElementById('result-screen').classList.remove('hidden');
+
+            const isCorrect = selectedIndex === currentQuestionData.correctAnswer;
+            const statusEl = document.getElementById('result-status');
+            
+            if (isCorrect) {
+                statusEl.innerText = "🎉 Correct!";
+                statusEl.className = "text-2xl font-bold text-emerald-400";
+            } else {
+                statusEl.innerText = "❌ Incorrect";
+                statusEl.className = "text-2xl font-bold text-rose-400";
+            }
+            document.getElementById('explanation-text').innerText = currentQuestionData.explanation;
+        }
+
+        function resetToHome() {
+            document.getElementById('quiz-screen').classList.add('hidden');
+            document.getElementById('result-screen').classList.add('hidden');
+            document.getElementById('admin-screen').classList.add('hidden');
+            document.getElementById('language-selection').classList.remove('hidden');
+        }
+
+        // Simple check to display admin button if user matches authorized list
+        if (user.id === YOUR_TELEGRAM_ADMIN_ID) {
+            document.getElementById('admin-btn-container').classList.remove('hidden');
+        }
+
+        function openAdminPanel() {
+            document.getElementById('language-selection').classList.add('hidden');
+            document.getElementById('admin-screen').classList.remove('hidden');
+        }
+
+        async function submitNewQuestion() {
+            const payload = {
+                question: document.getElementById('admin-q').value,
+                language: document.getElementById('admin-lang').value,
+                options: [
+                    document.getElementById('admin-opt0').value,
+                    document.getElementById('admin-opt1').value,
+                    document.getElementById('admin-opt2').value
+                ],
+                correctAnswer: parseInt(document.getElementById('admin-correct').value),
+                explanation: document.getElementById('admin-explanation').value,
+                adminId: user.id
+            };
+
+            const res = await fetch('/api/add-question', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                alert('Question added successfully!');
+                resetToHome();
+            } else {
+                alert('Unauthorized or failed to save.');
+            }
+        }
+    </script>
+</body>
+</html>
