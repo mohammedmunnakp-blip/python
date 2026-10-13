@@ -6,8 +6,8 @@
     <title>DevQuiz Daily</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Adsgram SDK Script -->
-    <script src="https://sad.adsgram.ai/js/sad.js"></script>
+    <!-- Adsgram SDK Script (Updated to the correct minified version) -->
+    <script src="https://sad.adsgram.ai/js/sad.min.js"></script>
 </head>
 <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
 
@@ -75,48 +75,72 @@
         // Telegram WebApp Initialization
         const tg = window.Telegram.WebApp;
         tg.expand();
-        const user = tg.initDataUnsafe?.user || { id: 123456, username: 'TestUser' };
+        
+        // Define Admin ID
+        const ADMIN_TELEGRAM_ID = 123456789;
+        
+        // Setup User data (Defaults to Admin ID for local testing)
+        const user = tg.initDataUnsafe?.user || { id: ADMIN_TELEGRAM_ID, username: 'TestUser' };
 
-        // Adsgram Rewarded Controller Setup (Block ID from your Adsgram dashboard)
-        const adController = window.Adsgram ? window.Adsgram.init({ blockId: "YOUR_ADSGRAM_BLOCK_ID" }) : null;
+        // Adsgram Rewarded Controller Setup with Block ID 53693
+        const adController = window.Adsgram ? window.Adsgram.init({ blockId: "53693" }) : null;
 
         let currentQuestionData = null;
+
+        // Display admin button if user matches authorized list
+        if (user.id === ADMIN_TELEGRAM_ID) {
+            document.getElementById('admin-btn-container').classList.remove('hidden');
+        }
 
         async function loadDailyChallenge(lang) {
             document.getElementById('language-selection').classList.add('hidden');
             document.getElementById('quiz-screen').classList.remove('hidden');
             document.getElementById('quiz-lang').innerText = lang.toUpperCase();
+            
+            // Reset question UI while loading
+            document.getElementById('question-text').innerText = "Loading challenge...";
+            const optContainer = document.getElementById('options-container');
+            optContainer.innerHTML = '';
+            document.getElementById('hint-btn').classList.remove('hidden');
 
-            // Fetch question from your backend / Firebase REST API
             try {
                 const res = await fetch(`/api/get-challenge?lang=${lang}`);
-                currentQuestionData = await res.json();
-                
+                const data = await res.json();
+
+                // Handle missing questions correctly
+                if (!res.ok) {
+                    document.getElementById('question-text').innerText = data.error || "Failed to load today's challenge.";
+                    document.getElementById('hint-btn').classList.add('hidden');
+                    return;
+                }
+
+                currentQuestionData = data;
                 document.getElementById('question-text').innerText = currentQuestionData.question;
-                const optContainer = document.getElementById('options-container');
-                optContainer.innerHTML = '';
                 
                 currentQuestionData.options.forEach((opt, index) => {
                     optContainer.innerHTML += `<button onclick="verifyAnswer(${index})" class="w-full p-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-left text-sm transition">${opt}</button>`;
                 });
             } catch (err) {
-                document.getElementById('question-text').innerText = "Failed to load today's challenge. Please try again later.";
+                document.getElementById('question-text').innerText = "Failed to communicate with server. Please try again later.";
+                document.getElementById('hint-btn').classList.add('hidden');
             }
         }
 
         async function watchAdForHint() {
             if (adController) {
                 try {
-                    // Trigger rewarded ad safely (voluntary user action, avoiding Clause 11 violations)
-                    const result = await adController.show();
-                    if (result.done) {
-                        alert("Hint: " + currentQuestionData.explanation.substring(0, 50) + "...");
-                    }
+                    // Trigger rewarded ad correctly using Promise
+                    await adController.show();
+                    
+                    // If the line below runs, the ad was successfully watched
+                    const hintText = (currentQuestionData.explanation || "").substring(0, 70);
+                    alert("Hint: " + hintText + "...");
                 } catch (e) {
-                    alert("Ad unavailable right now. You can still answer normally!");
+                    // Triggers if user closes ad early or ad fails to load
+                    alert("Ad skipped or unavailable right now. You can still answer normally!");
                 }
             } else {
-                alert("Ads are initializing...");
+                alert("Ads network is currently initializing or unavailable.");
             }
         }
 
@@ -144,11 +168,6 @@
             document.getElementById('language-selection').classList.remove('hidden');
         }
 
-        // Simple check to display admin button if user matches authorized list
-        if (user.id === YOUR_TELEGRAM_ADMIN_ID) {
-            document.getElementById('admin-btn-container').classList.remove('hidden');
-        }
-
         function openAdminPanel() {
             document.getElementById('language-selection').classList.add('hidden');
             document.getElementById('admin-screen').classList.remove('hidden');
@@ -168,17 +187,31 @@
                 adminId: user.id
             };
 
-            const res = await fetch('/api/add-question', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
+            try {
+                const res = await fetch('/api/add-question', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
 
-            if (res.ok) {
-                alert('Question added successfully!');
-                resetToHome();
-            } else {
-                alert('Unauthorized or failed to save.');
+                if (res.ok) {
+                    alert('Question added successfully!');
+                    
+                    // Clear admin fields
+                    document.getElementById('admin-q').value = '';
+                    document.getElementById('admin-opt0').value = '';
+                    document.getElementById('admin-opt1').value = '';
+                    document.getElementById('admin-opt2').value = '';
+                    document.getElementById('admin-correct').value = '';
+                    document.getElementById('admin-explanation').value = '';
+                    
+                    resetToHome();
+                } else {
+                    const errData = await res.json();
+                    alert(errData.error || 'Failed to save question.');
+                }
+            } catch (err) {
+                alert('Network error while saving.');
             }
         }
     </script>
